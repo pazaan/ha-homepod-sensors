@@ -5,7 +5,6 @@ import secrets
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.network import get_url
@@ -83,6 +82,13 @@ class HomePodSensorsOptionsFlow(config_entries.OptionsFlow):
             self._config_entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
         )
 
+        webhook_id = self._config_entry.data.get(CONF_WEBHOOK_ID, "")
+        try:
+            base_url = get_url(self.hass, allow_internal=True, allow_ip=True)
+        except Exception:
+            base_url = "http://<your-ha-ip>:8123"
+        webhook_url = f"{base_url}/api/webhook/{webhook_id}" if webhook_id else ""
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -92,4 +98,7 @@ class HomePodSensorsOptionsFlow(config_entries.OptionsFlow):
                     ),
                 }
             ),
+            description_placeholders={
+                "webhook_url": webhook_url,
+            },
         )

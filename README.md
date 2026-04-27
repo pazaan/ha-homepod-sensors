@@ -5,7 +5,7 @@
 
 Expose your **HomePod Mini temperature and humidity sensors** in Home Assistant.
 
-Apple enables the HomePod Mini's built-in sensors in the Apple Home app but deliberately blocks third-party access via the HomeKit Controller API. This integration bridges the gap using an **iOS Shortcuts automation** that pushes sensor data to a Home Assistant webhook every 5 minutes (configurable).
+Apple enables the HomePod Mini's built-in sensors in the Apple Home app but deliberately blocks third-party access via the HomeKit Controller API. This integration bridges the gap: it exposes a switch entity that pulses on a configurable interval, and an iOS Shortcuts Personal Automation running on your iPhone POSTs the latest temperature and humidity to a Home Assistant webhook each time the switch turns on.
 
 ---
 
@@ -55,7 +55,15 @@ Copy `custom_components/homepod_sensors/` to your HA `config/custom_components/`
 4. Set your preferred update interval (default: 5 minutes)
 5. Click **Submit**
 
-### Step 2 — Create the iOS Shortcut
+### Step 2 — Expose the Refresh switch to Apple Home
+
+The integration creates a `switch.homepod_sensors_refresh` entity that pulses on the interval you chose. Apple TV (and any iOS Home Hub) will run the Shortcut whenever this switch turns on.
+
+1. Set up Home Assistant's [HomeKit Bridge integration](https://www.home-assistant.io/integrations/homekit/) if you haven't already.
+2. Add `switch.homepod_sensors_refresh` to its `include_entities` list (UI: *Settings → Devices & Services → HomeKit Bridge → Configure → Entities*).
+3. Open the **Home** app on your iPhone and confirm the switch appears as an accessory.
+
+### Step 3 — Create the iOS Shortcut
 
 **Option A: Import the template (easiest)**
 
@@ -63,42 +71,38 @@ Download [`shortcuts/HomePod Sensors.shortcut`](shortcuts/HomePod%20Sensors.shor
 
 **Option B: Create manually**
 
-1. Open the **Shortcuts** app on your iPhone
-2. Tap **Automation** → **+** → **Time of Day**
-3. Set it to run every **5 minutes** (or your chosen interval), repeat daily
-4. Add the following actions in order:
+1. Open the **Shortcuts** app on your iPhone.
+2. Build the data-collection actions (see [shortcuts/README.md](shortcuts/README.md) for the full action list).
+3. End the Shortcut with a **Get Contents of URL** action that POSTs the JSON payload to your webhook URL.
 
-**Action 1: Get details of Home**
-- Action: *Get details of home*
-- Select your HomePod Mini → pick **Current temperature** and **Current humidity**
-- Repeat for each HomePod Mini you want to track
+### Step 4 — Create the Personal Automation
 
-**Action 2: Get Contents of URL**
-- URL: *(paste your webhook URL from Step 1)*
-- Method: **POST**
-- Request Body: **JSON**
-- Add a JSON body like this (adjust for each device):
+Use the **Shortcuts** app (not the Home app — Home → Automation uses a restricted action set that does *not* expose *Run Shortcut*).
 
-```json
-{
-  "devices": [
-    {
-      "serial": "REPLACE_WITH_SERIAL",
-      "name": "Living Room HomePod",
-      "temperature_c": [Temperature variable from Action 1],
-      "humidity_pct": [Humidity variable from Action 1]
-    }
-  ]
-}
-```
+1. Open **Shortcuts → Automation → + → New Automation**.
+2. Search/scroll to **Accessory** → tap **An Accessory Turns On**.
+3. Pick **HomePod Sensors Refresh** → **Next**.
+4. Choose **Run Immediately** so each pulse fires the Shortcut without confirmation.
+5. Action: **Run Shortcut** → select your *HomePod Sensors* shortcut.
+6. Tap **Done**.
 
-> **Finding your HomePod serial**: Open the **Home** app → tap your HomePod → tap the ⚙️ icon → scroll to *Serial Number*.
+> **Execution scope:** Personal Automations run on the iPhone — they fire when the iPhone is on the same network as the HomePods. If you need automation execution to continue while your iPhone is away, the trade-off is that Home-app automations *can* run on Apple TV / HomePod / iPad Home Hubs but their action set excludes *Run Shortcut*, so the data-collection actions would have to be inlined. See the [shortcuts/README.md](shortcuts/README.md) for that variant.
 
-5. Tap **Done** and enable the automation
+### Transport security
 
-### Step 3 — Verify
+The webhook URL contains a long-lived token in its path. **Do not POST over plain HTTP on a network you don't fully trust** — anyone on the same Wi-Fi can sniff the token and the sensor data, and (with the token) can spoof readings.
 
-Run the Shortcut once manually (tap ▷ in the Automation tab). Within a few seconds, devices should appear under **Settings → Devices & Services → HomePod Sensors**.
+Recommended local-HTTPS options:
+
+- A reverse proxy (Caddy, NGINX, Traefik) terminating TLS with a Let's Encrypt certificate via DNS-01 challenge.
+- Tailscale or WireGuard between the iOS device and HA.
+- HA core HTTPS configured with `ssl_certificate` / `ssl_key`.
+
+Nabu Casa's remote URL also works but routes traffic over the internet — overkill for an integration whose entire premise is a local push.
+
+### Step 5 — Verify
+
+Run the Shortcut once manually (tap the switch in the Home app, or tap ▷ on the Shortcut). Within a few seconds, devices should appear under **Settings → Devices & Services → HomePod Sensors**.
 
 ---
 
@@ -165,10 +169,20 @@ automation:
 
 ---
 
+## Upgrading from 1.x
+
+Version 2.0 changes the Shortcut trigger from "Time of Day" to "Accessory Turns On". Your webhook URL and existing HA configuration carry over — only the iOS automation needs to be rebuilt:
+
+1. Update the integration via HACS and restart Home Assistant.
+2. Open the **Home** app and add `switch.homepod_sensors_refresh` to your HomeKit Bridge include list (see Step 2 above).
+3. Delete your old "Time of Day" automation in the **Shortcuts** app.
+4. Create the new accessory-triggered Personal Automation in the **Shortcuts** app (see Step 4 above).
+
 ## Version History
 
 | Version | Changes |
 |---------|---------|
+| 2.0.0 | Replaces time-of-day Shortcut trigger with an integration-owned switch entity that pulses on the configured interval. Trigger is now a Shortcuts-app Personal Automation listening for the switch turning on. **Breaking:** existing users must rebuild their iOS automation — see *Upgrading from 1.x*. |
 | 1.0.0 | Initial release — webhook bridge, auto-discovery, temp/humidity/stale entities |
 
 ---

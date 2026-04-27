@@ -12,7 +12,7 @@ Alternatively, build it manually using the steps below.
 
 ## What the Shortcut Does
 
-Every **5 minutes** (default), the shortcut:
+Whenever the `switch.homepod_sensors_refresh` entity turns on (driven by the integration's interval timer), the shortcut:
 
 1. Queries HomeKit for all HomePod Mini accessories
 2. Reads each device's **temperature** and **humidity** values
@@ -69,12 +69,20 @@ Get Contents of URL:
 
 ## Automation Setup
 
-Once the Shortcut is working manually:
+Use a **Personal Automation in the Shortcuts app** (not Home → Automation, which uses a restricted action set that doesn't expose *Run Shortcut*).
 
-1. Open **Shortcuts → Automation → New Automation**
-2. Trigger: **Time of Day** → Every **5 minutes** (or match your HA update interval)
-3. Action: **Run Shortcut** → select *HomePod Sensors*
-4. Disable "Ask Before Running" → enable "Run After Confirmation"
+Prerequisite: `switch.homepod_sensors_refresh` is already exposed to Apple Home via HomeKit Bridge (see the main README, Step 2).
+
+1. Open the **Shortcuts** app → **Automation** tab → **+** → **New Automation**.
+2. Search for or scroll to **Accessory** → tap **An Accessory Turns On**.
+3. Pick **HomePod Sensors Refresh** → **Next**.
+4. Choose **Run Immediately** (so it doesn't ask for confirmation each cycle).
+5. Action: **Run Shortcut** → select your **HomePod Sensors** shortcut.
+6. Tap **Done**.
+
+The integration flips the switch *off* automatically a couple of seconds after each pulse, so the next interval gets a fresh rising edge.
+
+> **Execution scope:** Personal Automations run on the iPhone. If you need execution to continue while your phone is away, see the main README's discussion of the Home-app vs. Shortcuts-app trigger trade-off.
 
 ---
 
@@ -108,7 +116,7 @@ Once the Shortcut is working manually:
 | No entities appear | Run the Shortcut manually once; check HA logs |
 | Temperature shows wrong | Verify HomeKit accessory type is "Thermostat" |
 | Multiple devices show as one | Ensure each HomePod has a unique serial in HomeKit |
-| Stale sensor turns ON | Shortcut automation may have stopped; check iOS battery optimization |
+| Stale sensor turns ON | iPhone away or Personal Automation paused; check iOS battery optimization and that the switch is still pulsing in HA |
 
 ---
 
