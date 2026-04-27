@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from .const import DOMAIN, PULSE_DURATION_SECONDS
+
+if TYPE_CHECKING:
+    from .switch import HomePodRefreshSwitch
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,12 +42,12 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            # No polling — we are purely push-driven. update_interval is stored for
-            # staleness calculation only and is not passed to the parent coordinator.
         )
         self.data: dict[str, HomePodDeviceData] = {}
         self.update_interval_minutes = update_interval_minutes
         self._new_device_callbacks: list[Callable[[str, HomePodDeviceData], None]] = []
+        self._switch: "HomePodRefreshSwitch | None" = None
+        self._pulse_off_unsub: CALLBACK_TYPE | None = None
 
     @callback
     def register_new_device_callback(
@@ -50,6 +55,38 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
     ) -> None:
         """Register a callback invoked when a previously-unseen device reports in."""
         self._new_device_callbacks.append(cb)
+
+    @callback
+    def register_switch(self, switch: "HomePodRefreshSwitch") -> None:
+        """Register the refresh switch so pulse() can drive it."""
+        self._switch = switch
+
+    async def pulse(self) -> None:
+        """Turn the refresh switch on, schedule it back off after PULSE_DURATION_SECONDS."""
+        if self._switch is None:
+            return
+
+        if self._pulse_off_unsub is not None:
+            self._pulse_off_unsub()
+            self._pulse_off_unsub = None
+
+        await self._switch.async_turn_on()
+
+        async def _turn_off(_now: datetime) -> None:
+            self._pulse_off_unsub = None
+            if self._switch is not None:
+                await self._switch.async_turn_off()
+
+        self._pulse_off_unsub = async_call_later(
+            self.hass, timedelta(seconds=PULSE_DURATION_SECONDS), _turn_off
+        )
+
+    @callback
+    def async_shutdown(self) -> None:
+        """Cancel any pending pulse-off on unload."""
+        if self._pulse_off_unsub is not None:
+            self._pulse_off_unsub()
+            self._pulse_off_unsub = None
 
     def handle_webhook_payload(self, devices: list[dict]) -> None:
         """Process incoming payload from the iOS Shortcut."""
@@ -72,10 +109,8 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
 
             self.data[serial].update(float(temp), float(humidity))
 
-        # Notify coordinator listeners (existing entities) of updated data.
         self.async_set_updated_data(self.data)
 
-        # Notify platform callbacks about brand-new devices.
         for serial in new_serials:
             for cb in self._new_device_callbacks:
                 cb(serial, self.data[serial])
