@@ -51,8 +51,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, _on_tick, timedelta(minutes=update_interval)
     )
 
-    # Cold-start pulse so sensors populate as soon as the user finishes Shortcut setup.
-    await coordinator.pulse()
+    # Cold-start pulse so sensors populate as soon as the user finishes Shortcut
+    # setup. Scheduled as a task rather than awaited inline to give the switch
+    # entity from async_forward_entry_setups a fresh loop tick to finish
+    # async_added_to_hass before we write state.
+    hass.async_create_task(coordinator.pulse())
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     return True
@@ -77,7 +80,15 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry.
+
+    Platforms are unloaded first; only when that succeeds do we tear down the
+    interval listener, the coordinator, and the webhook. This keeps the
+    integration in a retryable state if platform unload fails.
+    """
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+
     unsub = INTERVAL_UNSUBS.pop(entry.entry_id, None)
     if unsub is not None:
         unsub()
@@ -87,7 +98,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_shutdown()
 
     ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unloaded:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unloaded
+    hass.data[DOMAIN].pop(entry.entry_id, None)
+    return True
