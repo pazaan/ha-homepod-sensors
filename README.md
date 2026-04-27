@@ -5,7 +5,7 @@
 
 Expose your **HomePod Mini temperature and humidity sensors** in Home Assistant.
 
-Apple enables the HomePod Mini's built-in sensors in the Apple Home app but deliberately blocks third-party access via the HomeKit Controller API. This integration bridges the gap using an **iOS Shortcuts automation** that pushes sensor data to a Home Assistant webhook every 5 minutes (configurable).
+Apple enables the HomePod Mini's built-in sensors in the Apple Home app but deliberately blocks third-party access via the HomeKit Controller API. This integration bridges the gap: it exposes a switch entity that pulses on a configurable interval, and an iOS Shortcuts Personal Automation running on your iPhone POSTs the latest temperature and humidity to a Home Assistant webhook each time the switch turns on.
 
 ---
 
@@ -75,15 +75,18 @@ Download [`shortcuts/HomePod Sensors.shortcut`](shortcuts/HomePod%20Sensors.shor
 2. Build the data-collection actions (see [shortcuts/README.md](shortcuts/README.md) for the full action list).
 3. End the Shortcut with a **Get Contents of URL** action that POSTs the JSON payload to your webhook URL.
 
-### Step 4 — Create the Apple TV automation
+### Step 4 — Create the Personal Automation
 
-In the **Home** app on your iPhone:
+Use the **Shortcuts** app (not the Home app — Home → Automation uses a restricted action set that does *not* expose *Run Shortcut*).
 
-1. Tap **Automation → +**.
-2. Trigger: **An Accessory Is Controlled** → select **HomePod Sensors Refresh** → **Turns On**.
-3. Action: **Run Shortcut** → select your HomePod Sensors shortcut.
-4. Confirm "Run At Home Hub" is shown — this is what makes Apple TV execute it.
-5. Save and enable.
+1. Open **Shortcuts → Automation → + → New Automation**.
+2. Search/scroll to **Accessory** → tap **An Accessory Turns On**.
+3. Pick **HomePod Sensors Refresh** → **Next**.
+4. Choose **Run Immediately** so each pulse fires the Shortcut without confirmation.
+5. Action: **Run Shortcut** → select your *HomePod Sensors* shortcut.
+6. Tap **Done**.
+
+> **Execution scope:** Personal Automations run on the iPhone — they fire when the iPhone is on the same network as the HomePods. If you need automation execution to continue while your iPhone is away, the trade-off is that Home-app automations *can* run on Apple TV / HomePod / iPad Home Hubs but their action set excludes *Run Shortcut*, so the data-collection actions would have to be inlined. See the [shortcuts/README.md](shortcuts/README.md) for that variant.
 
 ### Transport security
 
@@ -173,15 +176,13 @@ Version 2.0 changes the Shortcut trigger from "Time of Day" to "Accessory Turns 
 1. Update the integration via HACS and restart Home Assistant.
 2. Open the **Home** app and add `switch.homepod_sensors_refresh` to your HomeKit Bridge include list (see Step 2 above).
 3. Delete your old "Time of Day" automation in the **Shortcuts** app.
-4. Create the new automation in the **Home** app (see Step 4 above).
-
-Apple TV users gain support — the v1.x time-based trigger never worked on Apple TV Home Hubs.
+4. Create the new accessory-triggered Personal Automation in the **Shortcuts** app (see Step 4 above).
 
 ## Version History
 
 | Version | Changes |
 |---------|---------|
-| 2.0.0 | Replaces time-of-day Shortcut trigger with an integration-owned switch entity. Adds Apple TV Home Hub support. **Breaking:** existing users must rebuild their iOS automation — see *Upgrading from 1.x*. |
+| 2.0.0 | Replaces time-of-day Shortcut trigger with an integration-owned switch entity that pulses on the configured interval. Trigger is now a Shortcuts-app Personal Automation listening for the switch turning on. **Breaking:** existing users must rebuild their iOS automation — see *Upgrading from 1.x*. |
 | 1.0.0 | Initial release — webhook bridge, auto-discovery, temp/humidity/stale entities |
 
 ---
