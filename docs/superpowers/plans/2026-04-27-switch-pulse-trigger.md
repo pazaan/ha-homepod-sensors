@@ -694,7 +694,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator: HomePodCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is not None:
-        coordinator.async_shutdown()
+        await coordinator.async_shutdown()
 
     ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

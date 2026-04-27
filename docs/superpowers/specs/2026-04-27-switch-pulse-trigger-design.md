@@ -60,7 +60,7 @@ Webhook ingestion is unchanged. Only the trigger mechanism changes.
 - `pulse()` — async method. No-ops if no switch has been registered yet (defensive against early calls or switch-platform setup failure). Otherwise: cancels any in-flight pulse-off, turns the switch on, then schedules `_turn_off` to run after `PULSE_DURATION_SECONDS` via `async_call_later`. Idempotent: calling while a pulse is in progress restarts the off-timer.
 - `_pulse_off_unsub: CALLBACK_TYPE | None` — cancel handle for the currently scheduled turn-off. Uses `homeassistant.helpers.event.async_call_later` so tests can advance time via `async_fire_time_changed`.
 - `register_switch(switch)` — called by the switch platform during setup so the coordinator can drive it.
-- `async_shutdown()` — calls `_pulse_off_unsub()` if set, clears the reference, on unload.
+- `async_shutdown()` — async override that cancels `_pulse_off_unsub` if set, then chains to `super().async_shutdown()` (the parent `DataUpdateCoordinator` shutdown). Always awaited from `async_unload_entry`.
 
 #### `switch.py` (new)
 
@@ -87,7 +87,7 @@ In `async_setup_entry`:
 
 In `async_update_options`: when interval changes, cancel the existing time-interval unsub, register a new one with the updated period. Do **not** fire an immediate pulse on options change.
 
-In `async_unload_entry`: existing webhook unregister, plus `coordinator.async_shutdown()` to cancel any in-flight pulse-off.
+In `async_unload_entry`: existing webhook unregister, plus `await coordinator.async_shutdown()` to cancel any in-flight pulse-off.
 
 #### `config_flow.py`
 

@@ -46,7 +46,7 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
         self.data: dict[str, HomePodDeviceData] = {}
         self.update_interval_minutes = update_interval_minutes
         self._new_device_callbacks: list[Callable[[str, HomePodDeviceData], None]] = []
-        self._switch: "HomePodRefreshSwitch | None" = None
+        self._switch: HomePodRefreshSwitch | None = None
         self._pulse_off_unsub: CALLBACK_TYPE | None = None
 
     @callback
@@ -57,13 +57,14 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
         self._new_device_callbacks.append(cb)
 
     @callback
-    def register_switch(self, switch: "HomePodRefreshSwitch") -> None:
+    def register_switch(self, switch: HomePodRefreshSwitch) -> None:
         """Register the refresh switch so pulse() can drive it."""
         self._switch = switch
 
     async def pulse(self) -> None:
         """Turn the refresh switch on, schedule it back off after PULSE_DURATION_SECONDS."""
         if self._switch is None:
+            _LOGGER.debug("pulse() called before switch registered; skipping")
             return
 
         if self._pulse_off_unsub is not None:
@@ -81,12 +82,12 @@ class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
             self.hass, timedelta(seconds=PULSE_DURATION_SECONDS), _turn_off
         )
 
-    @callback
-    def async_shutdown(self) -> None:
-        """Cancel any pending pulse-off on unload."""
+    async def async_shutdown(self) -> None:
+        """Cancel any pending pulse-off, then run the parent shutdown."""
         if self._pulse_off_unsub is not None:
             self._pulse_off_unsub()
             self._pulse_off_unsub = None
+        await super().async_shutdown()
 
     def handle_webhook_payload(self, devices: list[dict]) -> None:
         """Process incoming payload from the iOS Shortcut."""

@@ -89,5 +89,36 @@ async def test_async_shutdown_cancels_in_flight_off(
     await coordinator.pulse()
     assert coordinator._pulse_off_unsub is not None
 
-    coordinator.async_shutdown()
+    await coordinator.async_shutdown()
     assert coordinator._pulse_off_unsub is None
+
+
+async def test_pulse_turn_on_failure_leaves_no_dangling_unsub(
+    coordinator: HomePodCoordinator,
+) -> None:
+    """If async_turn_on raises, the prior unsub must already be cleared."""
+    switch = MagicMock()
+    switch.async_turn_on = AsyncMock()
+    switch.async_turn_off = AsyncMock()
+    coordinator.register_switch(switch)
+
+    # First pulse establishes a real unsub; capture it so we can cancel it later.
+    await coordinator.pulse()
+    real_unsub = coordinator._pulse_off_unsub
+    assert real_unsub is not None
+
+    # Replace with a stand-in so we can assert it gets called on the next pulse.
+    prior_unsub = MagicMock()
+    coordinator._pulse_off_unsub = prior_unsub
+
+    # Make the next turn_on raise.
+    switch.async_turn_on.side_effect = RuntimeError("entity removed")
+
+    with pytest.raises(RuntimeError):
+        await coordinator.pulse()
+
+    # Prior unsub must have been cancelled before the raise.
+    assert prior_unsub.call_count == 1
+
+    # Cancel the real timer from the first pulse to avoid a lingering timer.
+    real_unsub()
