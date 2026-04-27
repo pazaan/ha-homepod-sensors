@@ -26,14 +26,21 @@ async def async_setup_entry(
 
 
 class HomePodRefreshSwitch(SwitchEntity):
-    """Switch that pulses on a configurable interval to trigger an iOS Shortcut."""
+    """Switch that pulses on a configurable interval to trigger an iOS Shortcut.
+
+    State is driven both by the coordinator (during pulses) and by the user
+    (via the UI). The coordinator only calls async_turn_on/off after the
+    platform's async_setup_entry has completed, so the entity is guaranteed
+    to be added to HA before any state write.
+    """
 
     _attr_has_entity_name = True
     _attr_name = "Refresh"
     _attr_should_poll = False
 
     def __init__(self, coordinator: HomePodCoordinator, entry: ConfigEntry) -> None:
-        self._coordinator = coordinator
+        # Coordinator is registered with us via coordinator.register_switch()
+        # in the platform setup; this entity does not call back into it.
         webhook_id = entry.data[CONF_WEBHOOK_ID]
         self._attr_unique_id = f"{webhook_id}_refresh_trigger"
         self._attr_is_on = False
@@ -50,9 +57,11 @@ class HomePodRefreshSwitch(SwitchEntity):
         )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on. Called by the coordinator during a pulse cycle, or by the user via the UI."""
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off. Called by the coordinator at the end of a pulse cycle, or by the user via the UI."""
         self._attr_is_on = False
         self.async_write_ha_state()
