@@ -49,6 +49,11 @@
           "off": "Fresh"
         }
       }
+    },
+    "switch": {
+      "refresh": {
+        "name": "Refresh"
+      }
     }
   }
 }
