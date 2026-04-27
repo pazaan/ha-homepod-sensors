@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components import webhook
+from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_UPDATE_INTERVAL, CONF_WEBHOOK_ID, DEFAULT_UPDATE_INTERVAL, DOMAIN, PLATFORMS
 from .coordinator import HomePodCoordinator
@@ -24,7 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     webhook_id = entry.data[CONF_WEBHOOK_ID]
-    webhook.async_register(
+    ha_webhook.async_register(
         hass,
         DOMAIN,
         "HomePod Sensors",
@@ -48,7 +47,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
+    ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)

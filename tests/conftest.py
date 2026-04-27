@@ -11,8 +11,13 @@ from custom_components.homepod_sensors.const import (
     DOMAIN,
 )
 
-
 TEST_WEBHOOK_ID = "test-webhook-id-abc123"
+
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Make pytest-homeassistant-custom-component pick up our component."""
+    yield
 
 
 @pytest.fixture

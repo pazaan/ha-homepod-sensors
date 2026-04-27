@@ -11,4 +11,4 @@ DEFAULT_UPDATE_INTERVAL = 5  # minutes
 DEFAULT_STALENESS_MULTIPLIER = 3  # stale after 3x the update interval
 PULSE_DURATION_SECONDS = 2  # how long the refresh switch stays "on" per pulse
 
-PLATFORMS = ["sensor", "binary_sensor", "switch"]
+PLATFORMS = ["sensor", "binary_sensor"]

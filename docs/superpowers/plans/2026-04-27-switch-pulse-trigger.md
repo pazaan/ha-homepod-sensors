@@ -41,17 +41,19 @@
 
 Replace `"version": "1.0.0"` with `"version": "2.0.0"` in `manifest.json`.
 
-- [ ] **Step 2: Add `PULSE_DURATION_SECONDS` and update `PLATFORMS`**
+- [ ] **Step 2: Add `PULSE_DURATION_SECONDS`**
 
-Replace the bottom of `const.py` with:
+Add a new constant in `const.py` so downstream tasks can reference it. The bottom of the file becomes:
 
 ```python
 DEFAULT_UPDATE_INTERVAL = 5  # minutes
 DEFAULT_STALENESS_MULTIPLIER = 3  # stale after 3x the update interval
 PULSE_DURATION_SECONDS = 2  # how long the refresh switch stays "on" per pulse
 
-PLATFORMS = ["sensor", "binary_sensor", "switch"]
+PLATFORMS = ["sensor", "binary_sensor"]
 ```
+
+Note: `"switch"` is intentionally **not** added to `PLATFORMS` here. It is added in Task 3 once `switch.py` exists. Adding it earlier would break `async_setup_entry` because HA tries to import each listed platform module.
 
 - [ ] **Step 3: Verify lint passes**
 
@@ -188,7 +190,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -216,7 +218,7 @@ class HomePodDeviceData:
     def update(self, temperature_c: float, humidity_pct: float) -> None:
         self.temperature_c = temperature_c
         self.humidity_pct = humidity_pct
-        self.last_seen = datetime.now(timezone.utc)
+        self.last_seen = datetime.now(UTC)
 
 
 class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
@@ -329,6 +331,7 @@ git commit -m "feat(coordinator): add pulse() and async_shutdown()"
 **Files:**
 - Create: `custom_components/homepod_sensors/switch.py`
 - Create: `tests/test_switch.py`
+- Modify: `custom_components/homepod_sensors/const.py` (add `"switch"` to `PLATFORMS`)
 
 - [ ] **Step 1: Write failing switch entity tests**
 
@@ -491,13 +494,23 @@ class HomePodRefreshSwitch(SwitchEntity):
 
 - [ ] **Step 4: Quick sanity import**
 
-Run: `python -c "from custom_components.homepod_sensors.switch import HomePodRefreshSwitch"`
+Run: `.venv/bin/python -c "from custom_components.homepod_sensors.switch import HomePodRefreshSwitch"`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add `"switch"` to `PLATFORMS` in `const.py`**
+
+Open `custom_components/homepod_sensors/const.py` and update:
+
+```python
+PLATFORMS = ["sensor", "binary_sensor", "switch"]
+```
+
+(`PLATFORMS` was deliberately left as `["sensor", "binary_sensor"]` until now — adding the entry before the platform module existed would have broken `async_setup_entry` mid-rebase. With `switch.py` now in place this is safe.)
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add custom_components/homepod_sensors/switch.py tests/test_switch.py
+git add custom_components/homepod_sensors/switch.py tests/test_switch.py custom_components/homepod_sensors/const.py
 git commit -m "feat(switch): add refresh switch platform"
 ```
 
@@ -601,7 +614,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from homeassistant.components import webhook
+from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
@@ -631,7 +644,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     webhook_id = entry.data[CONF_WEBHOOK_ID]
-    webhook.async_register(
+    ha_webhook.async_register(
         hass,
         DOMAIN,
         "HomePod Sensors",
@@ -683,7 +696,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if coordinator is not None:
         coordinator.async_shutdown()
 
-    webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
+    ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)
