@@ -20,6 +20,7 @@
     "step": {
       "init": {
         "title": "HomePod Sensors Options",
+        "description": "Webhook URL (POST sensor data here from your iOS automation):\n\n```\n{webhook_url}\n```",
         "data": {
           "update_interval": "Update interval (minutes)"
         },
