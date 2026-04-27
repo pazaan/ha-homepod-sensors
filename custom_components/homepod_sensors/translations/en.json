@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Set up HomePod Sensors",
-        "description": "Your iOS Shortcut should POST to this webhook URL every {update_interval} minutes:\n\n```\n{webhook_url}\n```\n\nSee the README for the full Shortcut setup guide and importable template.\n\nSet the update interval below (how often your iOS Shortcut will run).",
+        "description": "Your iOS Shortcut should POST sensor data to this webhook URL:\n\n```\n{webhook_url}\n```\n\nThe integration creates a `switch.homepod_sensors_refresh` entity that pulses on the interval below. Expose it via HomeKit Bridge and run your Shortcut on the rising edge — see the README for full setup.",
         "data": {
           "update_interval": "Update interval (minutes)"
         },
         "data_description": {
-          "update_interval": "How often the iOS Shortcut pushes sensor data. Devices are marked stale after 3× this value."
+          "update_interval": "How often the refresh switch pulses. Devices are marked stale after 3× this value."
         }
       }
     },
@@ -24,7 +24,7 @@
           "update_interval": "Update interval (minutes)"
         },
         "data_description": {
-          "update_interval": "How often the iOS Shortcut pushes sensor data. Staleness threshold = 3× this value."
+          "update_interval": "How often the refresh switch pulses. Staleness threshold = 3× this value."
         }
       }
     }
