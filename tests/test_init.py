@@ -65,3 +65,45 @@ async def test_unload_entry(
     assert await hass.config_entries.async_unload(setup_integration.entry_id)
     await hass.async_block_till_done()
     assert setup_integration.entry_id not in hass.data.get(DOMAIN, {})
+
+
+async def test_options_change_reregisters_interval(
+    hass: HomeAssistant, setup_integration: MockConfigEntry
+) -> None:
+    """Changing the update interval should swap the interval listener cleanly."""
+    from custom_components.homepod_sensors import INTERVAL_UNSUBS
+
+    original_unsub = INTERVAL_UNSUBS[setup_integration.entry_id]
+
+    hass.config_entries.async_update_entry(
+        setup_integration,
+        options={"update_interval": 10},
+    )
+    await hass.async_block_till_done()
+
+    new_unsub = INTERVAL_UNSUBS[setup_integration.entry_id]
+    assert new_unsub is not original_unsub
+
+    coordinator = hass.data[DOMAIN][setup_integration.entry_id]
+    assert coordinator.update_interval_minutes == 10
+
+
+async def test_unload_pops_interval_unsub(
+    hass: HomeAssistant, setup_integration: MockConfigEntry
+) -> None:
+    """Unloading the entry must remove its INTERVAL_UNSUBS entry to avoid leaking listeners."""
+    from custom_components.homepod_sensors import INTERVAL_UNSUBS
+
+    # Sanity: the listener was registered during setup.
+    assert setup_integration.entry_id in INTERVAL_UNSUBS
+
+    # Let the cold-start pulse settle so unload doesn't race the off-timer.
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=PULSE_DURATION_SECONDS + 1)
+    )
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_unload(setup_integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert setup_integration.entry_id not in INTERVAL_UNSUBS
