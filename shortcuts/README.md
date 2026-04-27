@@ -69,12 +69,14 @@ Get Contents of URL:
 
 ## Automation Setup
 
-Once the Shortcut is working manually:
+The integration's switch entity is the trigger. Once it is exposed via HomeKit Bridge, set up an automation in the iPhone **Home** app:
 
-1. Open **Shortcuts → Automation → New Automation**
-2. Trigger: **Time of Day** → Every **5 minutes** (or match your HA update interval)
-3. Action: **Run Shortcut** → select *HomePod Sensors*
-4. Disable "Ask Before Running" → enable "Run After Confirmation"
+1. Open **Home → Automation → +**.
+2. Trigger: **An Accessory Is Controlled** → **HomePod Sensors Refresh** → **Turns On**.
+3. Action: **Run Shortcut** → select *HomePod Sensors*.
+4. Confirm the Home Hub badge ("Run At Home Hub") appears, then save.
+
+The integration sets the switch *off* automatically a couple of seconds after each pulse, so the next interval gets a fresh "turns on" edge.
 
 ---
 
