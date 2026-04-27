@@ -57,10 +57,10 @@ Webhook ingestion is unchanged. Only the trigger mechanism changes.
 
 `HomePodCoordinator` gains pulse responsibility:
 
-- `pulse()` — async method. No-ops if no switch has been registered yet (defensive against early calls or switch-platform setup failure). Otherwise: cancels any in-flight pulse-off task, calls switch turn-on, schedules turn-off after `PULSE_DURATION_SECONDS`. Idempotent: calling while a pulse is in progress restarts the off-timer.
-- `_pulse_task: asyncio.Task | None` — tracks the currently scheduled turn-off.
+- `pulse()` — async method. No-ops if no switch has been registered yet (defensive against early calls or switch-platform setup failure). Otherwise: cancels any in-flight pulse-off, turns the switch on, then schedules `_turn_off` to run after `PULSE_DURATION_SECONDS` via `async_call_later`. Idempotent: calling while a pulse is in progress restarts the off-timer.
+- `_pulse_off_unsub: CALLBACK_TYPE | None` — cancel handle for the currently scheduled turn-off. Uses `homeassistant.helpers.event.async_call_later` so tests can advance time via `async_fire_time_changed`.
 - `register_switch(switch)` — called by the switch platform during setup so the coordinator can drive it.
-- `async_shutdown()` — cancels `_pulse_task` cleanly on unload.
+- `async_shutdown()` — calls `_pulse_off_unsub()` if set, clears the reference, on unload.
 
 #### `switch.py` (new)
 
@@ -68,8 +68,8 @@ Webhook ingestion is unchanged. Only the trigger mechanism changes.
 
 - Single instance per integration.
 - `unique_id = f"{webhook_id}_refresh_trigger"`.
-- `_attr_name = "Refresh"` (combined with device name → "HomePod Sensors Refresh").
-- `DeviceInfo` references a synthetic device `(DOMAIN, f"{webhook_id}_bridge")` named "HomePod Sensors Bridge", manufacturer "HomePod Sensors integration". This keeps the switch off the per-HomePod device cards.
+- `_attr_name = "Refresh"`. With `_attr_has_entity_name = True` and the device name "HomePod Sensors" (below), this yields `entity_id = switch.homepod_sensors_refresh` and friendly name "HomePod Sensors Refresh".
+- `DeviceInfo` references a synthetic device `(DOMAIN, f"{webhook_id}_bridge")`, name "HomePod Sensors", manufacturer "HomePod Sensors integration", model "Refresh trigger". The `_bridge` identifier suffix is internal-only and disambiguates this synthetic device from per-HomePod devices (which use the raw serial as their identifier).
 - `async_turn_on` / `async_turn_off` update `_attr_is_on` and call `async_write_ha_state()`. They do **not** trigger pulse cycles (the pulse is coordinator-driven; the switch is the visible state).
 - Manual user toggle via UI is allowed and useful for debugging.
 
@@ -87,7 +87,7 @@ In `async_setup_entry`:
 
 In `async_update_options`: when interval changes, cancel the existing time-interval unsub, register a new one with the updated period. Do **not** fire an immediate pulse on options change.
 
-In `async_unload_entry`: existing webhook unregister, plus `await coordinator.async_shutdown()` to cancel any in-flight pulse-off.
+In `async_unload_entry`: existing webhook unregister, plus `coordinator.async_shutdown()` to cancel any in-flight pulse-off.
 
 #### `config_flow.py`
 
@@ -116,8 +116,8 @@ Unchanged. Existing `update_interval` (1–60 minutes) drives both the pulse cad
 New `tests/test_switch.py`:
 
 - Switch entity created on setup.
-- `coordinator.pulse()` flips switch on, then off after `PULSE_DURATION_SECONDS` (use `async_fire_time_changed` to advance the clock).
-- Rapid pulse calls cancel previous off-timer.
+- `coordinator.pulse()` flips switch on, then off after `PULSE_DURATION_SECONDS` (advance HA time via `async_fire_time_changed`).
+- Rapid pulse calls cancel previous off-unsub before scheduling a new one.
 - Manual `async_turn_on` / `async_turn_off` writes state without triggering pulse cycle.
 
 Updated `tests/test_init.py`:
