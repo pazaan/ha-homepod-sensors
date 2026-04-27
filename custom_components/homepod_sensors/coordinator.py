@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -26,7 +26,7 @@ class HomePodDeviceData:
     def update(self, temperature_c: float, humidity_pct: float) -> None:
         self.temperature_c = temperature_c
         self.humidity_pct = humidity_pct
-        self.last_seen = datetime.now(timezone.utc)
+        self.last_seen = datetime.now(UTC)
 
 
 class HomePodCoordinator(DataUpdateCoordinator[dict[str, HomePodDeviceData]]):
